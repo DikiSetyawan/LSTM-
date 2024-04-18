@@ -1,0 +1,73 @@
+LSTM
+import pandas as pd
+from tensorflow import keras
+from tensorflow.keras.layers import LSTM, Dense
+from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+
+# Load your PM2.5 data (replace 'data.csv' with your actual file path)
+data = pd.read_csv('data.csv')
+
+# Select PM2.5 values and timestamps (adjust column names if needed)
+pm25_data = data['PM2.5']
+timestamps = data['timestamp']  # Assuming timestamps are present
+
+# Define window size and forecast horizon
+window_size = 7  # Number of past PM2.5 values used for prediction
+forecast_size = 3  # Number of future PM2.5 values to predict
+
+# Scale the data
+scaler = MinMaxScaler(feature_range=(0, 1))
+scaled_data = scaler.fit_transform(pm25_data.values.reshape(-1, 1))
+
+# Create sequences for training and testing
+def create_sequences(data, window_size):
+  sequences = []
+  for i in range(len(data)-window_size):
+    sequence = data[i:i+window_size]
+    sequences.append(sequence)
+  return np.array(sequences)
+
+def create_future_targets(data, window_size, forecast_size):
+  targets = []
+  for i in range(len(data)-window_size):
+    target = data[i+window_size:i+window_size+forecast_size]
+    targets.append(target)
+  return np.array(targets)
+
+X_train = create_sequences(scaled_data[:-forecast_size], window_size)
+y_train = create_future_targets(scaled_data[:-forecast_size], window_size, forecast_size)
+X_test = create_sequences(scaled_data[-window_size:], window_size)
+
+# Build the LSTM model
+model = keras.Sequential()
+model.add(LSTM(units=50, return_sequences=True, input_shape=(window_size, 1)))
+model.add(LSTM(units=50))
+model.add(Dense(units=forecast_size))  # Output for multiple future values
+model.compile(loss='mse', optimizer='adam')
+
+# Train the model
+model.fit(X_train, y_train, epochs=100, batch_size=32)
+
+# Make predictions on test data
+predicted_pm25 = model.predict(X_test)
+
+# Invert scaling for predicted values
+predicted_pm25_scaled = scaler.inverse_transform(predicted_pm25)
+
+# Extract actual PM2.5 values for plotting (assuming they are not scaled)
+actual_pm25 = pm25_data[-window_size:]
+
+# Prepare data for plotting (forecast window)
+future_timestamps = timestamps[-window_size:] + pd.TimedeltaIndex(len(predicted_pm25_scaled[0]), unit='D')  # Assuming daily data
+
+# Plot actual vs predicted PM2.5
+plt.figure(figsize=(12, 6))
+plt.plot(timestamps[-window_size:], actual_pm25, label='Actual PM2.5')
+for i in range(forecast_size):
+  plt.plot(future_timestamps[i:], predicted_pm25_scaled[:, i], label=f'Predicted PM2.5 (+{i+1} days)')
+plt.xlabel('Time')
+plt.ylabel('PM2.5')
+plt.legend()
+plt.title('PM2.5 Forecasting')
+plt.show()
