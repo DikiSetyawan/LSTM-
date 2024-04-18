@@ -1,0 +1,50 @@
+#Sarima 
+import pandas as pd
+from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.arima.model import ARIMA
+import matplotlib.pyplot as plt
+
+# Load your PM2.5 data (replace 'data.csv' with your actual file path)
+data = pd.read_csv('data.csv')
+pm25_data = data['PM2.5']  # Assuming PM2.5 values are in a column named 'PM2.5'
+timestamps = data['timestamp']  # Assuming timestamps are present (adjust column names if needed)
+
+# Check for stationarity (using Augmented Dickey-Fuller test)
+from statsmodels.tsa.stattools import adfuller
+
+adf_result = adfuller(pm25_data)
+print(f'ADF Statistic: {adf_result[0]}')
+print(f'p-value: {adf_result[1]}')
+
+# If p-value > 0.05, the data is not stationary (adjust significance level if needed)
+if adf_result[1] > 0.05:
+  # Perform differencing if necessary to achieve stationality
+  pm25_data = pm25_data.diff().dropna()  # Apply differencing and remove NaN values
+
+# Decompose the data (optional)
+decomposition = seasonal_decompose(pm25_data, model='additive')
+decomposition.plot()
+plt.show()  # Analyze trend, seasonality, and residuals (optional)
+
+# Define the SARIMA model (assuming daily data with weekly seasonality)
+model = ARIMA(pm25_data, order=(1, 1, 1), seasonal_order=(1, 1, 1, 7))
+
+# Fit the model
+model_fit = model.fit()
+
+# Forecast the last 'forecast_size' data points (assuming daily data)
+forecast_size = 1
+forecast = model_fit.forecast(steps=forecast_size)
+
+# Plot actual vs forecasted PM2.5
+plt.figure(figsize=(12, 6))
+plt.plot(timestamps, pm25_data, label='Actual PM2.5')
+plt.plot(timestamps[-forecast_size:], forecast, label='Forecasted PM2.5')
+plt.xlabel('Time')
+plt.ylabel('PM2.5')
+plt.legend()
+plt.title('PM2.5 Forecasting with SARIMA')
+plt.show()
+
+# Print the forecasted PM2.5 value for the next day
+print(f'Forecasted PM2.5 for the next day: {forecast[0]}')
